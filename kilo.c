@@ -5,6 +5,10 @@
 #include <ctype.h>
 #include <errno.h>
 
+/**** definations ****/
+
+#define CTRL_KEY(k) ((k) & ox1f)
+
 /**** setting up terminal ****/
 
 struct termios org_termios;
@@ -50,7 +54,8 @@ int main() {
         else {
             printf("%d ('%c')\r\n", c, c); // 98('a')
         }
-        if( c == 'q') break;
+        if (c == CTRL_KEY('q')) break; //ctrl q allows for exit
+        
     }
     return 0;
 }
