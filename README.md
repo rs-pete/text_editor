@@ -1,2 +1,2 @@
 # Basic Text Editor
-Simple down to earth text ediot i am making.
+Simple text editor I am making.
