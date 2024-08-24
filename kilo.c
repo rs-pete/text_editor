@@ -3,17 +3,23 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 
 struct termios org_termios;
 
+void die(const char *s) { //check global error msg
+    perror(s); //global error
+    exit(1);
+}
+
 void disableRawMode() {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &org_termios); //TCSAFLUSH helps to not run a bash for the unrecoqnised output
+    if ( tcsetattr(STDIN_FILENO, TCSAFLUSH, &org_termios) == -1 ) //TCSAFLUSH helps to not run a bash for the unrecoqnised output
+        die("tcsetattr");
 }
 
 void enableRawMode() {
 
-    tcgetattr(STDIN_FILENO, &org_termios); //temp save termios
-
+    if( tcgetattr(STDIN_FILENO, &org_termios)  == -1 ) die("tcsetattr"); //temp save termios
     atexit(disableRawMode); //called at pgrm exit
 
     struct termios raw = org_termios;
@@ -25,7 +31,7 @@ void enableRawMode() {
     raw.c_cc[VMIN] = 0; //min bytes before return
     raw.c_cc[VTIME] = 1; //max wait time for read; here 1/10 sec
     
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+      if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
 int main() {
@@ -33,7 +39,7 @@ int main() {
 
     while (1) {
         char c = '\0';
-        read(STDIN_FILENO , &c , 1);
+            if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
         if (iscntrl(c)) { //cortol char chk
             printf("%d\r\n", c);
         }
