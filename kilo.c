@@ -5,6 +5,8 @@
 #include <ctype.h>
 #include <errno.h>
 
+/**** setting up terminal ****/
+
 struct termios org_termios;
 
 void die(const char *s) { //check global error msg
@@ -33,6 +35,8 @@ void enableRawMode() {
     
       if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
+
+/**** init ****/
 
 int main() {
     enableRawMode();
