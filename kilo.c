@@ -53,9 +53,20 @@ char editorReadKey() {
 
 /**** output ****/
 
+void editorDrawRows() {
+    int y;
+    for (y = 0; y <24 ; y++) { //24 is temp; for drawing ~across terminal screen
+        write(STDOUT_FILENO, "~\r\n", 3);
+    }
+}
+
 void editorRefreshScreen() {
-    write(STDOUT_FILENO, "\x1b[2J", 4 );
-    write(STDOUT_FILENO, "\x1b[H", 3 );
+    write(STDOUT_FILENO, "\x1b[2J", 4 ); //cle screen
+    write(STDOUT_FILENO, "\x1b[H", 3 ); //repositin cursor to start
+
+    editorDrawRows();
+
+    write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
 /**** input ****/
