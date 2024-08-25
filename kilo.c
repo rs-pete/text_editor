@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sys/ioctl.h>
 
 /**** define ****/
 
@@ -11,7 +12,13 @@
 
 /**** data ****/
 
-struct termios org_termios;
+struct editorConfig { //global var creation
+    int screenrows;
+    int screencols; 
+    struct termios org_termios;
+};
+
+struct editorConfig E;
 
 /**** terminal ****/
 
@@ -21,16 +28,16 @@ void die(const char *s) { //check global error msg
 }
 
 void disableRawMode() {
-    if ( tcsetattr(STDIN_FILENO, TCSAFLUSH, &org_termios) == -1 ) //TCSAFLUSH helps to not run a bash for the unrecoqnised output
+    if ( tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.org_termios) == -1 ) //TCSAFLUSH helps to not run a bash for the unrecoqnised output
         die("tcsetattr");
 }
 
 void enableRawMode() {
 
-    if( tcgetattr(STDIN_FILENO, &org_termios)  == -1 ) die("tcsetattr"); //temp save termios
+    if( tcgetattr(STDIN_FILENO, &E.org_termios)  == -1 ) die("tcsetattr"); //temp save termios
     atexit(disableRawMode); //called at pgrm exit
 
-    struct termios raw = org_termios;
+    struct termios raw = E.org_termios;
 
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
     raw.c_cflag |= (CS8);
@@ -51,11 +58,29 @@ char editorReadKey() {
     return c;
 }
 
+int getWindowSize(int *rows, int *cols) {
+    struct winsize ws;
+
+    //error check
+    // 0 is a possible error outcome; idk why
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) { 
+        return -1;
+    } 
+    else {
+        //terminal widith and height
+        *cols = ws.ws_col;
+        *rows = ws.ws_row;
+        return 0;
+    }
+}
+
 /**** output ****/
 
 void editorDrawRows() {
     int y;
-    for (y = 0; y <24 ; y++) { //24 is temp; for drawing ~across terminal screen
+    // draw ~ across terminal size like vim
+    // change 24 to actual termial width
+    for (y = 0; y < E.screenrows ; y++) {
         write(STDOUT_FILENO, "~\r\n", 3);
     }
 }
@@ -85,8 +110,13 @@ void editorProcessKeypress() {
 
 /**** init ****/
 
+void initEditor() {
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+}
+
 int main() {
     enableRawMode();
+    initEditor();
 
     while (1) {
         editorRefreshScreen();
