@@ -5,14 +5,17 @@
 #include <ctype.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 /**** define ****/
 
 #define CTRL_KEY(k) ((k) & 0x1f)
+#define KILO_VERSION "0.0.1"
 
 /**** data ****/
 
 struct editorConfig { //global var creation
+    int cx , cy;
     int screenrows;
     int screencols; 
     struct termios org_termios;
@@ -82,7 +85,7 @@ int getWindowSize(int *rows, int *cols) {
 
     //error check
     // 0 is a possible error outcome; idk why
-    if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) { 
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) { 
         //fallbak if iocntl wont work
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
         return getCursorPosition(rows, cols);
@@ -95,24 +98,76 @@ int getWindowSize(int *rows, int *cols) {
     }
 }
 
+/**** append buffer ****/
+
+//used to prevent muitiple wite()
+struct abuf {
+    char *b;
+    int len;
+};
+
+#define ABUF_INIT { NULL , 0 }
+
+void abAppend( struct abuf *ab , const char *s , int len ) {
+    char *new = realloc ( ab -> b , ab -> len + len );
+
+    if( new == NULL ) return;
+    memcpy( &new[ab -> len] , s , len );
+    ab -> b = new;
+    ab -> len += len;
+}
+
+void abFree( struct abuf *ab ) {
+    free( ab -> b );
+}
+
 /**** output ****/
 
-void editorDrawRows() {
+void editorDrawRows( struct abuf *ab ) {
     int y;
-    // draw ~ across terminal size like vim
-    // change 24 to actual termial width
     for (y = 0; y < E.screenrows ; y++) {
-        write(STDOUT_FILENO, "~\r\n", 3);
+        if ( y == E.screenrows / 3 ) {
+            char welcome[80];
+            int welcomelen = snprintf( welcome , sizeof(welcome) , "Kilo editor -- version %s" , KILO_VERSION );
+            if (welcomelen > E.screencols) welcomelen = E.screencols;
+            int padding = ( E.screencols - welcomelen ) / 2;
+            if(padding) {
+                abAppend(ab , "~" , 1);
+                padding--;
+            }
+            while (padding--) abAppend(ab , " " , 1);
+            abAppend(ab , welcome , welcomelen);
+        }
+        else {
+        abAppend(ab , "~" , 1) ;
+        }
+
+        abAppend(ab , "\x1b[K" , 3);
+        if ( y < E.screenrows - 1) {
+            abAppend(ab , "\r\n" , 2) ;
+        }
     }
 }
 
 void editorRefreshScreen() {
-    write(STDOUT_FILENO, "\x1b[2J", 4 ); //cle screen
-    write(STDOUT_FILENO, "\x1b[H", 3 ); //repositin cursor to start
 
-    editorDrawRows();
+    struct abuf ab = ABUF_INIT;
 
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    abAppend( &ab , "\x1b[?25l" , 6 ); //toggle hide cursor ;while writing to prevent flickring
+    //abAppend( &ab , "\x1b[2J" , 4 ); //clr screen
+    abAppend( &ab , "\x1b[H" , 3 ); //repositin cursor to start
+
+    editorDrawRows( &ab );
+
+    char buf[32];
+    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , E.cy + 1 , E.cx + 1);
+    abAppend(&ab, buf, strlen(buf));
+
+    abAppend( &ab , "\x1b[H" , 3 );
+    abAppend( &ab , "\x1b[?25h" , 6 ); //toggle cursor
+
+    write( STDOUT_FILENO, ab.b , ab.len );
+    abFree( &ab );
 }
 
 /**** input ****/
@@ -132,6 +187,10 @@ void editorProcessKeypress() {
 /**** init ****/
 
 void initEditor() {
+
+    E.cx = 0;
+    E.cy = 0;
+
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
 }
 
