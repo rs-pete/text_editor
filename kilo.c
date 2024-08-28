@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <sys/types.h>
 
 /**** define ****/
 
@@ -26,10 +27,17 @@ enum editorKey {
 
 /**** data ****/
 
+typedef struct erow {
+    int size;
+    char *chars;
+}erow;
+
 struct editorConfig { //global var creation
     int cx , cy;
     int screenrows;
     int screencols; 
+    int numrows;
+    erow row;
     struct termios org_termios;
 };
 
@@ -141,7 +149,8 @@ int getWindowSize(int *rows, int *cols) {
     //error check
     // 0 is a possible error outcome; idk why
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) { 
-        //fallbak if iocntl wont work
+        //fallback if iocntl wont work
+        //manually move cursor to end
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
         return getCursorPosition(rows, cols);
     } 
@@ -151,6 +160,19 @@ int getWindowSize(int *rows, int *cols) {
         *rows = ws.ws_row;
         return 0;
     }
+}
+
+/**** file  ****/
+
+void editorOpen() {
+    char *line= "Hello, World!";
+    ssize_t linelen = 13;
+
+    E.row.size = linelen;
+    E.row.chars = malloc(linelen + 1);
+    memcpy(E.row.chars, line, linelen);
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
 }
 
 /**** append buffer ****/
@@ -291,15 +313,18 @@ void editorProcessKeypress() {
 
 void initEditor() {
 
-    E.cx = 0;
-    E.cy = 0;
+    E.cx = 0; //cursor pos in x
+    E.cy = 0; //cursor pos in y
+    E.numrows = 0;
 
+    //resolve error
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
 }
 
 int main() {
     enableRawMode();
     initEditor();
+    editorOpen();
 
     while (1) {
         editorRefreshScreen();
